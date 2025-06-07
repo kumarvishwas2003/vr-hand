@@ -27,7 +27,6 @@ startBtn.addEventListener("click", async () => {
 
     detecting = true;
     detectHands();
-
   } catch (err) {
     log("Error: " + err.message);
     startBtn.disabled = false;
@@ -105,9 +104,9 @@ function drawHand(landmarks) {
   // Connect landmarks with lines for fingers
   // Handpose landmarks indexing (simplified connections)
   const fingers = [
-    [0, 1, 2, 3, 4],     // Thumb
-    [0, 5, 6, 7, 8],     // Index
-    [0, 9, 10, 11, 12],  // Middle
+    [0, 1, 2, 3, 4], // Thumb
+    [0, 5, 6, 7, 8], // Index
+    [0, 9, 10, 11, 12], // Middle
     [0, 13, 14, 15, 16], // Ring
     [0, 17, 18, 19, 20], // Pinky
   ];
@@ -116,4 +115,13 @@ function drawHand(landmarks) {
     ctx.beginPath();
     ctx.moveTo(landmarks[finger[0]][0], landmarks[finger[0]][1]);
     for (let i = 1; i < finger.length; i++) {
-      ctx.lineTo(landmarks[finger[i]][0], l
+      ctx.lineTo(landmarks[finger[i]][0], landmarks[finger[i]][1]);
+    }
+    ctx.stroke();
+  });
+}
+
+function log(msg) {
+  const now = new Date().toLocaleTimeString();
+  logDiv.textContent = `[${now}] ${msg}\n` + logDiv.textContent;
+}
