@@ -7,6 +7,13 @@ const logDiv = document.getElementById("log");
 let model = null;
 let detecting = false;
 
+// Define some objects with position and radius
+const objects = [
+  { x: 100, y: 100, radius: 30, color: "blue", active: false },
+  { x: 220, y: 140, radius: 40, color: "orange", active: false },
+  { x: 150, y: 200, radius: 25, color: "purple", active: false },
+];
+
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
   startBtn.innerText = "Starting camera...";
@@ -15,7 +22,6 @@ startBtn.addEventListener("click", async () => {
     await setupCamera();
     video.style.display = "block";
 
-    // Set canvas size same as video
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
@@ -74,19 +80,36 @@ async function detectHands() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Draw interactive objects
+    drawObjects();
+
     if (predictions.length > 0) {
       log("Hands detected: " + predictions.length);
 
-      // Draw landmarks for each detected hand
       predictions.forEach((hand) => {
         drawHand(hand.landmarks);
+        checkInteraction(hand.landmarks);
       });
     } else {
       log("No hands detected");
+      // Reset objects if no hands
+      objects.forEach((obj) => (obj.active = false));
     }
 
-    await new Promise((r) => setTimeout(r, 100)); // 10fps approx
+    await new Promise((r) => setTimeout(r, 100));
   }
+}
+
+function drawObjects() {
+  objects.forEach((obj) => {
+    ctx.beginPath();
+    ctx.fillStyle = obj.active ? "lime" : obj.color;
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.arc(obj.x, obj.y, obj.radius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+  });
 }
 
 function drawHand(landmarks) {
@@ -94,15 +117,12 @@ function drawHand(landmarks) {
   ctx.strokeStyle = "lime";
   ctx.lineWidth = 2;
 
-  // Draw circles for each landmark
   landmarks.forEach(([x, y, z]) => {
     ctx.beginPath();
     ctx.arc(x, y, 5, 0, 2 * Math.PI);
     ctx.fill();
   });
 
-  // Connect landmarks with lines for fingers
-  // Handpose landmarks indexing (simplified connections)
   const fingers = [
     [0, 1, 2, 3, 4], // Thumb
     [0, 5, 6, 7, 8], // Index
@@ -118,6 +138,22 @@ function drawHand(landmarks) {
       ctx.lineTo(landmarks[finger[i]][0], landmarks[finger[i]][1]);
     }
     ctx.stroke();
+  });
+}
+
+// Check if index fingertip is touching any object
+function checkInteraction(landmarks) {
+  // Index fingertip is landmark 8
+  const [x, y] = landmarks[8];
+
+  objects.forEach((obj) => {
+    const dist = Math.hypot(x - obj.x, y - obj.y);
+    if (dist < obj.radius + 10) {
+      // 10 px tolerance
+      obj.active = true;
+    } else {
+      obj.active = false;
+    }
   });
 }
 
