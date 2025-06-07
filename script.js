@@ -13,7 +13,11 @@ let targetCircle = {
 
 async function setupCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "user", width: 640, height: 480 },
+    video: {
+      facingMode: { exact: "environment" }, // 👈 back camera
+      width: 640,
+      height: 480,
+    },
     audio: false,
   });
   video.srcObject = stream;
@@ -24,6 +28,7 @@ async function setupCamera() {
     };
   });
 }
+
 
 async function detectHands() {
   const predictions = await model.estimateHands(video);
