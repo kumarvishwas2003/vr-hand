@@ -10,17 +10,34 @@ let targetCircle = {
   r: 30,
   color: "blue",
 };
-
 async function setupCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: { exact: "environment" }, // 👈 back camera
-      width: 640,
-      height: 480,
-    },
-    audio: false,
-  });
-  video.srcObject = stream;
+  try {
+    // Try back camera first
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: "environment" }, // Force rear camera
+        width: 640,
+        height: 480,
+      },
+      audio: false,
+    });
+    video.srcObject = stream;
+    console.log("✅ Back camera activated.");
+  } catch (err) {
+    console.warn("⚠️ Back camera failed, switching to front...", err);
+
+    // Fallback to front camera
+    const fallbackStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "user", // Front camera fallback
+        width: 640,
+        height: 480,
+      },
+      audio: false,
+    });
+    video.srcObject = fallbackStream;
+    console.log("✅ Front camera fallback activated.");
+  }
 
   return new Promise((resolve) => {
     video.onloadedmetadata = () => {
@@ -28,6 +45,7 @@ async function setupCamera() {
     };
   });
 }
+
 
 
 async function detectHands() {
