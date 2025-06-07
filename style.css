@@ -18,7 +18,19 @@ video {
   height: 240px;
   border: 2px solid #4caf50;
   border-radius: 6px;
+  display: block;
 }
+
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 320px;
+  height: 240px;
+  pointer-events: none; /* let clicks pass through */
+  border-radius: 6px;
+}
+
 #log {
   margin-top: 1rem;
   font-family: monospace;

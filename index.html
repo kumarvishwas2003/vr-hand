@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hand Tracking Web App</title>
-  
+  <title>Hand Tracking with Canvas</title>
+
   <!-- TensorFlow.js -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.9.0/dist/tf.min.js"></script>
   <!-- Handpose model -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
-  
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>Hand Tracking Demo</h1>
+  <h1>Hand Tracking with Canvas</h1>
 
   <button id="startBtn">Start Camera</button>
-  
-  <video id="video" autoplay playsinline style="display:none;"></video>
-  
+
+  <div style="position: relative; display: inline-block;">
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
   <div id="log"></div>
 
   <script src="script.js"></script>

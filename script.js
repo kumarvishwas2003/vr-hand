@@ -1,5 +1,7 @@
 const startBtn = document.getElementById("startBtn");
 const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 const logDiv = document.getElementById("log");
 
 let model = null;
@@ -13,13 +15,19 @@ startBtn.addEventListener("click", async () => {
     await setupCamera();
     video.style.display = "block";
 
+    // Set canvas size same as video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
     startBtn.innerText = "Loading model...";
     await initTfBackend();
-    model = await handpose.load();
 
+    model = await handpose.load();
     startBtn.innerText = "Detecting hands...";
+
     detecting = true;
     detectHands();
+
   } catch (err) {
     log("Error: " + err.message);
     startBtn.disabled = false;
@@ -28,7 +36,6 @@ startBtn.addEventListener("click", async () => {
 });
 
 async function setupCamera() {
-  // Try rear camera first, fallback to front camera if error
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -66,19 +73,47 @@ async function detectHands() {
   while (detecting) {
     const predictions = await model.estimateHands(video);
 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     if (predictions.length > 0) {
       log("Hands detected: " + predictions.length);
-      // Log first hand landmarks count for example
-      log("Landmarks: " + predictions[0].landmarks.length);
+
+      // Draw landmarks for each detected hand
+      predictions.forEach((hand) => {
+        drawHand(hand.landmarks);
+      });
     } else {
       log("No hands detected");
     }
 
-    await new Promise((r) => setTimeout(r, 200)); // wait 200ms before next detect
+    await new Promise((r) => setTimeout(r, 100)); // 10fps approx
   }
 }
 
-function log(msg) {
-  const now = new Date().toLocaleTimeString();
-  logDiv.textContent = `[${now}] ${msg}\n` + logDiv.textContent;
-}
+function drawHand(landmarks) {
+  ctx.fillStyle = "red";
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 2;
+
+  // Draw circles for each landmark
+  landmarks.forEach(([x, y, z]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+    ctx.fill();
+  });
+
+  // Connect landmarks with lines for fingers
+  // Handpose landmarks indexing (simplified connections)
+  const fingers = [
+    [0, 1, 2, 3, 4],     // Thumb
+    [0, 5, 6, 7, 8],     // Index
+    [0, 9, 10, 11, 12],  // Middle
+    [0, 13, 14, 15, 16], // Ring
+    [0, 17, 18, 19, 20], // Pinky
+  ];
+
+  fingers.forEach((finger) => {
+    ctx.beginPath();
+    ctx.moveTo(landmarks[finger[0]][0], landmarks[finger[0]][1]);
+    for (let i = 1; i < finger.length; i++) {
+      ctx.lineTo(landmarks[finger[i]][0], l
