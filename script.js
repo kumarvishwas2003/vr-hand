@@ -1,165 +1,91 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js";
+let video, canvas, ctx, model;
 
-// rest of your code...
-
-// Global vars
-let scene, camera, renderer;
-let video, videoTexture;
-let handModel = null;
-let handSpheres = [];
-let handposeModel = null;
-
-const info = document.getElementById("info");
 const startBtn = document.getElementById("startBtn");
+const info = document.getElementById("info");
 
 startBtn.addEventListener("click", async () => {
   startBtn.style.display = "none";
-  await initCamera();
-  initThree();
-  await loadHandpose();
-  animate();
+  info.innerText = "Loading camera...";
+
+  try {
+    await setupCamera();
+    await tf.setBackend("webgl");
+    await tf.ready();
+    model = await handpose.load();
+    info.innerText = "Model loaded! 🖐️ Show your hand.";
+    startDetection();
+  } catch (err) {
+    console.error("Setup failed:", err);
+    info.innerText = `Camera error: ${err.name || "Unknown"} - ${
+      err.message || err
+    }`;
+  }
 });
 
-async function initCamera() {
+async function setupCamera() {
   video = document.createElement("video");
+  video.setAttribute("playsinline", "true"); // Required for iOS
   video.style.display = "none";
   document.body.appendChild(video);
 
-  const stream = await navigator.mediaDevices
-    .getUserMedia({
-      video: { facingMode: { exact: "environment" }, width: 640, height: 480 },
+  // Try ideal back camera, fallback to default
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
       audio: false,
-    })
-    .catch(async () => {
-      // fallback to front camera if back camera fails
-      return await navigator.mediaDevices.getUserMedia({ video: true });
     });
+  } catch {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  }
 
   video.srcObject = stream;
   await video.play();
 
-  videoTexture = new THREE.VideoTexture(video);
-  videoTexture.minFilter = THREE.LinearFilter;
-  videoTexture.magFilter = THREE.LinearFilter;
-  videoTexture.format = THREE.RGBFormat;
+  canvas = document.getElementById("canvas");
+  ctx = canvas.getContext("2d");
+
+  // Match canvas to video size
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
 }
 
-function initThree() {
-  scene = new THREE.Scene();
+function startDetection() {
+  const obj = { x: canvas.width / 2, y: canvas.height / 2, radius: 30 };
 
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  async function detect() {
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-  camera.position.set(0, 1.6, 3); // typical VR height and distance
-
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(width, height);
-  document.body.appendChild(renderer.domElement);
-
-  // Add live video as background
-  const bgPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(16, 9),
-    new THREE.MeshBasicMaterial({ map: videoTexture })
-  );
-  bgPlane.position.z = -10;
-  bgPlane.scale.setScalar(1.2);
-  scene.add(bgPlane);
-
-  // Simple room - just a box wireframe
-  const room = new THREE.BoxGeometry(5, 3, 5);
-  const roomMat = new THREE.MeshBasicMaterial({
-    color: 0x444444,
-    wireframe: true,
-  });
-  const roomMesh = new THREE.Mesh(room, roomMat);
-  scene.add(roomMesh);
-
-  // Add some interactive cubes
-  const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-  const material = new THREE.MeshPhongMaterial({ color: 0x2194ce });
-
-  for (let i = 0; i < 5; i++) {
-    const cube = new THREE.Mesh(geometry, material.clone());
-    cube.position.set(
-      Math.random() * 3 - 1.5,
-      1 + Math.random(),
-      Math.random() * -2
-    );
-    cube.name = "cube" + i;
-    scene.add(cube);
-  }
-
-  // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-  scene.add(ambientLight);
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(0, 4, 4);
-  scene.add(dirLight);
-
-  // Create spheres for hand landmarks
-  const sphereGeom = new THREE.SphereGeometry(0.02, 8, 8);
-  const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-
-  for (let i = 0; i < 21; i++) {
-    const sphere = new THREE.Mesh(sphereGeom, sphereMat.clone());
-    sphere.visible = false;
-    scene.add(sphere);
-    handSpheres.push(sphere);
-  }
-
-  // Handle device orientation for camera rotation
-  window.addEventListener("deviceorientation", onDeviceOrientation, true);
-}
-
-let alpha = 0,
-  beta = 0,
-  gamma = 0;
-function onDeviceOrientation(event) {
-  alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
-  beta = event.beta ? THREE.MathUtils.degToRad(event.beta) : 0;
-  gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
-
-  // Basic rotation based on beta and gamma (tilt)
-  camera.rotation.x = beta - Math.PI / 2;
-  camera.rotation.z = -gamma;
-  camera.rotation.y = alpha;
-}
-
-async function loadHandpose() {
-  handposeModel = await handpose.load();
-  info.textContent = "Handpose model loaded.";
-}
-
-async function animate() {
-  requestAnimationFrame(animate);
-
-  if (handposeModel && video.readyState === video.HAVE_ENOUGH_DATA) {
-    const predictions = await handposeModel.estimateHands(video, true);
-
+    const predictions = await model.estimateHands(video);
     if (predictions.length > 0) {
-      const landmarks = predictions[0].landmarks;
+      const tip = predictions[0].annotations.indexFinger[3]; // tip of index finger
+      const [x, y] = tip;
 
-      // Map landmarks to Three.js coords (simple mapping)
-      for (let i = 0; i < landmarks.length; i++) {
-        const [x, y, z] = landmarks[i];
+      // Draw pointer
+      ctx.beginPath();
+      ctx.arc(x, y, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = "lime";
+      ctx.fill();
 
-        // Video coordinates to normalized device coordinates (-1 to 1)
-        const nx = (x / video.videoWidth) * 2 - 1;
-        const ny = -((y / video.videoHeight) * 2 - 1);
+      // Check collision
+      const dx = x - obj.x;
+      const dy = y - obj.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Map to 3D space in front of camera
-        const distance = 1; // distance from camera
-        const vector = new THREE.Vector3(nx, ny, -distance);
-        vector.unproject(camera);
-
-        handSpheres[i].position.copy(vector);
-        handSpheres[i].visible = true;
-      }
+      ctx.beginPath();
+      ctx.arc(obj.x, obj.y, obj.radius, 0, 2 * Math.PI);
+      ctx.fillStyle = dist < obj.radius + 10 ? "cyan" : "red";
+      ctx.fill();
     } else {
-      handSpheres.forEach((s) => (s.visible = false));
+      // Draw static object if no hand
+      ctx.beginPath();
+      ctx.arc(obj.x, obj.y, obj.radius, 0, 2 * Math.PI);
+      ctx.fillStyle = "red";
+      ctx.fill();
     }
+
+    requestAnimationFrame(detect);
   }
 
-  renderer.render(scene, camera);
+  detect();
 }
