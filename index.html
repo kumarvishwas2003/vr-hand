@@ -2,28 +2,42 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hand Tracking with Canvas</title>
-
-  <!-- TensorFlow.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.9.0/dist/tf.min.js"></script>
-  <!-- Handpose model -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
-
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Web VR Hand Tracking</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; overflow: hidden;
+      height: 100%;
+      background: black;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #startBtn {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      font-size: 18px;
+      z-index: 100;
+    }
+    #info {
+      position: absolute;
+      bottom: 10px; left: 10px; color: white;
+      font-family: monospace;
+      z-index: 100;
+    }
+  </style>
 </head>
 <body>
-  <h1>Hand Tracking with Canvas</h1>
-
-  <button id="startBtn">Start Camera</button>
-
-  <div style="position: relative; display: inline-block;">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-  </div>
-
-  <div id="log"></div>
-
+  <button id="startBtn">Start Experience</button>
+  <div id="info"></div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.6.0/dist/tf-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.6.0/dist/tf-converter.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

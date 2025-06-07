@@ -1,163 +1,163 @@
+import * as THREE from "three";
+
+// Global vars
+let scene, camera, renderer;
+let video, videoTexture;
+let handModel = null;
+let handSpheres = [];
+let handposeModel = null;
+
+const info = document.getElementById("info");
 const startBtn = document.getElementById("startBtn");
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-const logDiv = document.getElementById("log");
-
-let model = null;
-let detecting = false;
-
-// Define some objects with position and radius
-const objects = [
-  { x: 100, y: 100, radius: 30, color: "blue", active: false },
-  { x: 220, y: 140, radius: 40, color: "orange", active: false },
-  { x: 150, y: 200, radius: 25, color: "purple", active: false },
-];
 
 startBtn.addEventListener("click", async () => {
-  startBtn.disabled = true;
-  startBtn.innerText = "Starting camera...";
-
-  try {
-    await setupCamera();
-    video.style.display = "block";
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    startBtn.innerText = "Loading model...";
-    await initTfBackend();
-
-    model = await handpose.load();
-    startBtn.innerText = "Detecting hands...";
-
-    detecting = true;
-    detectHands();
-  } catch (err) {
-    log("Error: " + err.message);
-    startBtn.disabled = false;
-    startBtn.innerText = "Start Camera";
-  }
+  startBtn.style.display = "none";
+  await initCamera();
+  initThree();
+  await loadHandpose();
+  animate();
 });
 
-async function setupCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { exact: "environment" },
-        width: 640,
-        height: 480,
-      },
+async function initCamera() {
+  video = document.createElement("video");
+  video.style.display = "none";
+  document.body.appendChild(video);
+
+  const stream = await navigator.mediaDevices
+    .getUserMedia({
+      video: { facingMode: { exact: "environment" }, width: 640, height: 480 },
       audio: false,
+    })
+    .catch(async () => {
+      // fallback to front camera if back camera fails
+      return await navigator.mediaDevices.getUserMedia({ video: true });
     });
-    video.srcObject = stream;
-  } catch (e) {
-    console.warn("Rear camera not found, using front camera.", e);
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: 640, height: 480 },
-      audio: false,
-    });
-    video.srcObject = stream;
+
+  video.srcObject = stream;
+  await video.play();
+
+  videoTexture = new THREE.VideoTexture(video);
+  videoTexture.minFilter = THREE.LinearFilter;
+  videoTexture.magFilter = THREE.LinearFilter;
+  videoTexture.format = THREE.RGBFormat;
+}
+
+function initThree() {
+  scene = new THREE.Scene();
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+
+  camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+  camera.position.set(0, 1.6, 3); // typical VR height and distance
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(width, height);
+  document.body.appendChild(renderer.domElement);
+
+  // Add live video as background
+  const bgPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(16, 9),
+    new THREE.MeshBasicMaterial({ map: videoTexture })
+  );
+  bgPlane.position.z = -10;
+  bgPlane.scale.setScalar(1.2);
+  scene.add(bgPlane);
+
+  // Simple room - just a box wireframe
+  const room = new THREE.BoxGeometry(5, 3, 5);
+  const roomMat = new THREE.MeshBasicMaterial({
+    color: 0x444444,
+    wireframe: true,
+  });
+  const roomMesh = new THREE.Mesh(room, roomMat);
+  scene.add(roomMesh);
+
+  // Add some interactive cubes
+  const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+  const material = new THREE.MeshPhongMaterial({ color: 0x2194ce });
+
+  for (let i = 0; i < 5; i++) {
+    const cube = new THREE.Mesh(geometry, material.clone());
+    cube.position.set(
+      Math.random() * 3 - 1.5,
+      1 + Math.random(),
+      Math.random() * -2
+    );
+    cube.name = "cube" + i;
+    scene.add(cube);
   }
 
-  return new Promise((resolve) => {
-    video.onloadedmetadata = () => {
-      video.play();
-      resolve(video);
-    };
-  });
+  // Lights
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+  scene.add(ambientLight);
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(0, 4, 4);
+  scene.add(dirLight);
+
+  // Create spheres for hand landmarks
+  const sphereGeom = new THREE.SphereGeometry(0.02, 8, 8);
+  const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+  for (let i = 0; i < 21; i++) {
+    const sphere = new THREE.Mesh(sphereGeom, sphereMat.clone());
+    sphere.visible = false;
+    scene.add(sphere);
+    handSpheres.push(sphere);
+  }
+
+  // Handle device orientation for camera rotation
+  window.addEventListener("deviceorientation", onDeviceOrientation, true);
 }
 
-async function initTfBackend() {
-  await tf.setBackend("webgl");
-  await tf.ready();
-  log("TensorFlow.js backend: " + tf.getBackend());
+let alpha = 0,
+  beta = 0,
+  gamma = 0;
+function onDeviceOrientation(event) {
+  alpha = event.alpha ? THREE.MathUtils.degToRad(event.alpha) : 0;
+  beta = event.beta ? THREE.MathUtils.degToRad(event.beta) : 0;
+  gamma = event.gamma ? THREE.MathUtils.degToRad(event.gamma) : 0;
+
+  // Basic rotation based on beta and gamma (tilt)
+  camera.rotation.x = beta - Math.PI / 2;
+  camera.rotation.z = -gamma;
+  camera.rotation.y = alpha;
 }
 
-async function detectHands() {
-  while (detecting) {
-    const predictions = await model.estimateHands(video);
+async function loadHandpose() {
+  handposeModel = await handpose.load();
+  info.textContent = "Handpose model loaded.";
+}
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+async function animate() {
+  requestAnimationFrame(animate);
 
-    // Draw interactive objects
-    drawObjects();
+  if (handposeModel && video.readyState === video.HAVE_ENOUGH_DATA) {
+    const predictions = await handposeModel.estimateHands(video, true);
 
     if (predictions.length > 0) {
-      log("Hands detected: " + predictions.length);
+      const landmarks = predictions[0].landmarks;
 
-      predictions.forEach((hand) => {
-        drawHand(hand.landmarks);
-        checkInteraction(hand.landmarks);
-      });
+      // Map landmarks to Three.js coords (simple mapping)
+      for (let i = 0; i < landmarks.length; i++) {
+        const [x, y, z] = landmarks[i];
+
+        // Video coordinates to normalized device coordinates (-1 to 1)
+        const nx = (x / video.videoWidth) * 2 - 1;
+        const ny = -((y / video.videoHeight) * 2 - 1);
+
+        // Map to 3D space in front of camera
+        const distance = 1; // distance from camera
+        const vector = new THREE.Vector3(nx, ny, -distance);
+        vector.unproject(camera);
+
+        handSpheres[i].position.copy(vector);
+        handSpheres[i].visible = true;
+      }
     } else {
-      log("No hands detected");
-      // Reset objects if no hands
-      objects.forEach((obj) => (obj.active = false));
+      handSpheres.forEach((s) => (s.visible = false));
     }
-
-    await new Promise((r) => setTimeout(r, 100));
   }
-}
 
-function drawObjects() {
-  objects.forEach((obj) => {
-    ctx.beginPath();
-    ctx.fillStyle = obj.active ? "lime" : obj.color;
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.arc(obj.x, obj.y, obj.radius, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.stroke();
-  });
-}
-
-function drawHand(landmarks) {
-  ctx.fillStyle = "red";
-  ctx.strokeStyle = "lime";
-  ctx.lineWidth = 2;
-
-  landmarks.forEach(([x, y, z]) => {
-    ctx.beginPath();
-    ctx.arc(x, y, 5, 0, 2 * Math.PI);
-    ctx.fill();
-  });
-
-  const fingers = [
-    [0, 1, 2, 3, 4], // Thumb
-    [0, 5, 6, 7, 8], // Index
-    [0, 9, 10, 11, 12], // Middle
-    [0, 13, 14, 15, 16], // Ring
-    [0, 17, 18, 19, 20], // Pinky
-  ];
-
-  fingers.forEach((finger) => {
-    ctx.beginPath();
-    ctx.moveTo(landmarks[finger[0]][0], landmarks[finger[0]][1]);
-    for (let i = 1; i < finger.length; i++) {
-      ctx.lineTo(landmarks[finger[i]][0], landmarks[finger[i]][1]);
-    }
-    ctx.stroke();
-  });
-}
-
-// Check if index fingertip is touching any object
-function checkInteraction(landmarks) {
-  // Index fingertip is landmark 8
-  const [x, y] = landmarks[8];
-
-  objects.forEach((obj) => {
-    const dist = Math.hypot(x - obj.x, y - obj.y);
-    if (dist < obj.radius + 10) {
-      // 10 px tolerance
-      obj.active = true;
-    } else {
-      obj.active = false;
-    }
-  });
-}
-
-function log(msg) {
-  const now = new Date().toLocaleTimeString();
-  logDiv.textContent = `[${now}] ${msg}\n` + logDiv.textContent;
+  renderer.render(scene, camera);
 }
