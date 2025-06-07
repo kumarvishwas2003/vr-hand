@@ -73,4 +73,18 @@ async function startApp() {
   detectHands();
 }
 
-startBtn.addEventListener("click", startApp);
+startBtn.addEventListener("click", () => {
+  console.log("Start button clicked ✅");
+  startBtn.innerText = "Loading camera...";
+  startBtn.style.backgroundColor = "#555";
+  startBtn.disabled = true;
+
+  const msg = document.createElement("p");
+  msg.innerText = "Camera permission should appear now...";
+  msg.style.color = "lightgreen";
+  document.body.appendChild(msg);
+
+  startApp(); // Call the original function
+});
+
+
